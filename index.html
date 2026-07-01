@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iOS Reminder Pro</title>
+
+<style>
+:root{
+  --bg:#f5f5f7;
+  --card:#fff;
+  --text:#111;
+  --sub:#777;
+  --blue:#007aff;
+}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0b0b0f;
+    --card:#1c1c1e;
+    --text:#fff;
+    --sub:#aaa;
+  }
+}
+
+body{
+  margin:0;
+  font-family:-apple-system,BlinkMacSystemFont;
+  background:var(--bg);
+  color:var(--text);
+}
+
+/* 顶部 */
+.header{
+  padding:18px;
+  font-size:22px;
+  font-weight:600;
+}
+
+/* 容器 */
+.board{
+  padding:10px 15px 120px;
+}
+
+/* 分类卡片 */
+.category{
+  background:var(--card);
+  border-radius:18px;
+  padding:14px;
+  margin-bottom:12px;
+  transition:0.25s;
+}
+
+.cat-title{
+  display:flex;
+  justify-content:space-between;
+  font-weight:600;
+  margin-bottom:8px;
+}
+
+/* 任务 */
+.task{
+  display:flex;
+  justify-content:space-between;
+  padding:10px;
+  border-radius:10px;
+  transition:0.2s;
+  margin-bottom:6px;
+  user-select:none;
+  touch-action:pan-y;
+}
+
+.task:active{
+  transform:scale(0.98);
+}
+
+.task.done{
+  opacity:0.4;
+  text-decoration:line-through;
+}
+
+/* 左滑删除视觉 */
+.task.delete{
+  background:#ff3b30;
+  color:#fff;
+}
+
+/* 右滑完成视觉 */
+.task.doneAnim{
+  background:#34c759;
+  color:#fff;
+}
+
+/* FAB */
+.fab{
+  position:fixed;
+  right:20px;
+  bottom:30px;
+  width:62px;
+  height:62px;
+  border-radius:50%;
+  background:var(--blue);
+  color:#fff;
+  font-size:34px;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  box-shadow:0 10px 25px rgba(0,0,0,0.25);
+}
+
+/* modal */
+.modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.4);
+  display:none;
+  justify-content:center;
+  align-items:center;
+}
+
+.panel{
+  background:var(--card);
+  width:320px;
+  padding:16px;
+  border-radius:14px;
+}
+
+input,select{
+  width:100%;
+  padding:10px;
+  margin-top:10px;
+  border-radius:10px;
+  border:1px solid #ddd;
+}
+
+button{
+  width:100%;
+  margin-top:12px;
+  padding:10px;
+  background:var(--blue);
+  color:#fff;
+  border:none;
+  border-radius:10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">📋 提醒事项 Pro</div>
+<div id="board" class="board"></div>
+
+<div class="fab" onclick="openModal()">+</div>
+
+<!-- modal -->
+<div class="modal" id="modal">
+  <div class="panel">
+    <div>新建任务</div>
+
+    <select id="cat"></select>
+    <input id="text" placeholder="任务内容">
+    <input id="time" type="datetime-local">
+
+    <button onclick="add()">添加</button>
+  </div>
+</div>
+
+<script>
+
+let data = JSON.parse(localStorage.getItem("v4")||"null") || {
+  cats:[
+    {name:"工作",color:"#007aff",tasks:[]},
+    {name:"生活",color:"#34c759",tasks:[]},
+    {name:"重要",color:"#ff3b30",tasks:[]},
+    {name:"待办",color:"#ff9500",tasks:[]}
+  ]
+};
+
+function save(){
+  localStorage.setItem("v4",JSON.stringify(data));
+  render();
+}
+
+/* 渲染 */
+function render(){
+  const board=document.getElementById("board");
+  board.innerHTML="";
+
+  data.cats.forEach((c,i)=>{
+    const div=document.createElement("div");
+    div.className="category";
+
+    div.innerHTML=`<div class="cat-title">${c.name}</div>`;
+
+    c.tasks.forEach((t,ti)=>{
+      const el=document.createElement("div");
+      el.className="task "+(t.done?"done":"");
+
+      let startX=0;
+
+      el.innerHTML=`
+        <div>
+          ${t.text}
+          ${t.time?`<small> · ${t.time}</small>`:""}
+        </div>
+        <div>❌</div>
+      `;
+
+      /* 点击完成 */
+      el.onclick=()=>{
+        t.done=!t.done;
+        save();
+      };
+
+      /* 左右滑手势 */
+      el.addEventListener("touchstart",(e)=>{
+        startX=e.touches[0].clientX;
+      });
+
+      el.addEventListener("touchend",(e)=>{
+        let endX=e.changedTouches[0].clientX;
+        let diff=endX-startX;
+
+        if(diff>80){
+          // 右滑完成
+          t.done=true;
+        }
+
+        if(diff<-80){
+          // 左滑删除
+          c.tasks.splice(ti,1);
+        }
+
+        save();
+      });
+
+      /* 删除按钮 */
+      el.children[1].onclick=(e)=>{
+        e.stopPropagation();
+        c.tasks.splice(ti,1);
+        save();
+      };
+
+      div.appendChild(el);
+    });
+
+    board.appendChild(div);
+  });
+
+  updateSelect();
+}
+
+/* 下拉 */
+function updateSelect(){
+  let sel=document.getElementById("cat");
+  sel.innerHTML="";
+  data.cats.forEach((c,i)=>{
+    let op=document.createElement("option");
+    op.value=i;
+    op.textContent=c.name;
+    sel.appendChild(op);
+  });
+}
+
+/* modal */
+function openModal(){
+  document.getElementById("modal").style.display="flex";
+}
+
+/* 添加 */
+function add(){
+  let i=document.getElementById("cat").value;
+  let text=document.getElementById("text").value;
+  let time=document.getElementById("time").value;
+
+  if(!text)return;
+
+  data.cats[i].tasks.push({
+    text,
+    time:time||null,
+    done:false
+  });
+
+  document.getElementById("modal").style.display="none";
+  save();
+}
+
+render();
+
+</script>
+
+</body>
+</html>
