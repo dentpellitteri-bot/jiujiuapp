@@ -3,286 +3,231 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>iOS Reminder Pro</title>
+<title>V9 AI终极任务系统</title>
 
 <style>
 :root{
-  --bg:#f5f5f7;
-  --card:#fff;
-  --text:#111;
-  --sub:#777;
-  --blue:#007aff;
-}
-
-@media (prefers-color-scheme: dark){
-  :root{
-    --bg:#0b0b0f;
-    --card:#1c1c1e;
-    --text:#fff;
-    --sub:#aaa;
-  }
+  --bg1:#0f172a;
+  --bg2:#1e293b;
+  --card:rgba(255,255,255,0.08);
+  --text:#fff;
+  --blue:#3b82f6;
+  --green:#22c55e;
+  --red:#ef4444;
 }
 
 body{
   margin:0;
   font-family:-apple-system,BlinkMacSystemFont;
-  background:var(--bg);
+  background:linear-gradient(120deg,var(--bg1),var(--bg2));
   color:var(--text);
 }
 
 /* 顶部 */
 .header{
   padding:18px;
-  font-size:22px;
+  font-size:20px;
   font-weight:600;
 }
 
-/* 容器 */
-.board{
-  padding:10px 15px 120px;
-}
-
-/* 分类卡片 */
-.category{
-  background:var(--card);
-  border-radius:18px;
+/* 卡片 */
+.card{
+  margin:10px;
   padding:14px;
-  margin-bottom:12px;
-  transition:0.25s;
-}
-
-.cat-title{
-  display:flex;
-  justify-content:space-between;
-  font-weight:600;
-  margin-bottom:8px;
-}
-
-/* 任务 */
-.task{
-  display:flex;
-  justify-content:space-between;
-  padding:10px;
-  border-radius:10px;
-  transition:0.2s;
-  margin-bottom:6px;
+  border-radius:16px;
+  background:var(--card);
+  backdrop-filter:blur(12px);
+  transition:0.25s cubic-bezier(.2,.8,.2,1);
   user-select:none;
-  touch-action:pan-y;
 }
 
-.task:active{
-  transform:scale(0.98);
+.card:active{
+  transform:scale(0.96);
 }
 
-.task.done{
-  opacity:0.4;
+/* 删除动画 */
+.card.del{
+  transform:translateX(-120px);
+  opacity:0;
+}
+
+/* 完成 */
+.done{
+  background:rgba(34,197,94,0.3);
   text-decoration:line-through;
-}
-
-/* 左滑删除视觉 */
-.task.delete{
-  background:#ff3b30;
-  color:#fff;
-}
-
-/* 右滑完成视觉 */
-.task.doneAnim{
-  background:#34c759;
-  color:#fff;
 }
 
 /* FAB */
 .fab{
   position:fixed;
   right:20px;
-  bottom:30px;
-  width:62px;
-  height:62px;
+  bottom:25px;
+  width:64px;
+  height:64px;
   border-radius:50%;
   background:var(--blue);
-  color:#fff;
-  font-size:34px;
   display:flex;
-  justify-content:center;
   align-items:center;
-  box-shadow:0 10px 25px rgba(0,0,0,0.25);
+  justify-content:center;
+  font-size:30px;
+  box-shadow:0 10px 30px rgba(0,0,0,0.3);
 }
 
-/* modal */
-.modal{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,0.4);
-  display:none;
-  justify-content:center;
-  align-items:center;
-}
-
+/* 面板 */
 .panel{
-  background:var(--card);
-  width:320px;
-  padding:16px;
-  border-radius:14px;
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  padding:12px;
+  background:rgba(0,0,0,0.6);
+  backdrop-filter:blur(10px);
 }
 
-input,select{
+input{
   width:100%;
-  padding:10px;
-  margin-top:10px;
+  padding:12px;
   border-radius:10px;
-  border:1px solid #ddd;
+  border:none;
+  outline:none;
 }
 
 button{
   width:100%;
-  margin-top:12px;
-  padding:10px;
-  background:var(--blue);
-  color:#fff;
+  margin-top:8px;
+  padding:12px;
   border:none;
   border-radius:10px;
+  background:var(--blue);
+  color:white;
 }
 </style>
+
 </head>
 
 <body>
 
-<div class="header">📋 提醒事项 Pro</div>
-<div id="board" class="board"></div>
+<div class="header">🧠 V9 AI终极任务系统</div>
 
-<div class="fab" onclick="openModal()">+</div>
+<div id="list"></div>
 
-<!-- modal -->
-<div class="modal" id="modal">
-  <div class="panel">
-    <div>新建任务</div>
+<div class="fab" onclick="toggle()">🎤</div>
 
-    <select id="cat"></select>
-    <input id="text" placeholder="任务内容">
-    <input id="time" type="datetime-local">
-
-    <button onclick="add()">添加</button>
-  </div>
+<div class="panel" id="panel" style="display:none">
+  <input id="text" placeholder="说话或输入任务（AI自动识别）">
+  <button onclick="add()">生成任务</button>
 </div>
 
 <script>
 
-let data = JSON.parse(localStorage.getItem("v4")||"null") || {
-  cats:[
-    {name:"工作",color:"#007aff",tasks:[]},
-    {name:"生活",color:"#34c759",tasks:[]},
-    {name:"重要",color:"#ff3b30",tasks:[]},
-    {name:"待办",color:"#ff9500",tasks:[]}
-  ]
-};
+/* ========= 数据 ========= */
+let data = JSON.parse(localStorage.getItem("v9") || "[]");
 
+/* ========= AI解析 ========= */
+function aiParse(text){
+
+  let task = {
+    text,
+    time:null,
+    cat:"待办",
+    priority:1,
+    done:false
+  };
+
+  // 时间识别
+  if(text.includes("明天")){
+    let d=new Date();
+    d.setDate(d.getDate()+1);
+    task.time=d.toISOString().slice(0,16);
+  }
+
+  if(text.includes("今天")){
+    task.time=new Date().toISOString().slice(0,16);
+  }
+
+  // 分类
+  if(/开会|工作|客户|报告/.test(text)) task.cat="工作";
+  if(/吃|买|超市|家/.test(text)) task.cat="生活";
+  if(/重要|紧急/.test(text)) task.priority=10;
+
+  return task;
+}
+
+/* ========= 保存 ========= */
 function save(){
-  localStorage.setItem("v4",JSON.stringify(data));
+  localStorage.setItem("v9",JSON.stringify(data));
   render();
 }
 
-/* 渲染 */
+/* ========= 渲染 ========= */
 function render(){
-  const board=document.getElementById("board");
-  board.innerHTML="";
 
-  data.cats.forEach((c,i)=>{
-    const div=document.createElement("div");
-    div.className="category";
+  let list=document.getElementById("list");
+  list.innerHTML="";
 
-    div.innerHTML=`<div class="cat-title">${c.name}</div>`;
+  // AI排序（时间优先）
+  data.sort((a,b)=>{
+    return (a.time||"9999") > (b.time||"9999") ? 1 : -1;
+  });
 
-    c.tasks.forEach((t,ti)=>{
-      const el=document.createElement("div");
-      el.className="task "+(t.done?"done":"");
+  data.forEach((t,i)=>{
 
-      let startX=0;
+    let div=document.createElement("div");
+    div.className="card "+(t.done?"done":"");
 
-      el.innerHTML=`
-        <div>
-          ${t.text}
-          ${t.time?`<small> · ${t.time}</small>`:""}
-        </div>
-        <div>❌</div>
-      `;
+    div.innerHTML=`
+      <div style="font-size:16px">${t.text}</div>
+      <div style="opacity:0.6;font-size:12px">
+        ${t.cat} · ${t.time || "无时间"} · P${t.priority}
+      </div>
+    `;
 
-      /* 点击完成 */
-      el.onclick=()=>{
-        t.done=!t.done;
-        save();
-      };
+    /* 点击完成 */
+    div.onclick=()=>{
+      t.done=!t.done;
+      save();
+    };
 
-      /* 左右滑手势 */
-      el.addEventListener("touchstart",(e)=>{
-        startX=e.touches[0].clientX;
-      });
+    /* 左滑删除 */
+    let startX=0;
 
-      el.addEventListener("touchend",(e)=>{
-        let endX=e.changedTouches[0].clientX;
-        let diff=endX-startX;
-
-        if(diff>80){
-          // 右滑完成
-          t.done=true;
-        }
-
-        if(diff<-80){
-          // 左滑删除
-          c.tasks.splice(ti,1);
-        }
-
-        save();
-      });
-
-      /* 删除按钮 */
-      el.children[1].onclick=(e)=>{
-        e.stopPropagation();
-        c.tasks.splice(ti,1);
-        save();
-      };
-
-      div.appendChild(el);
+    div.addEventListener("touchstart",(e)=>{
+      startX=e.touches[0].clientX;
     });
 
-    board.appendChild(div);
-  });
+    div.addEventListener("touchend",(e)=>{
+      let diff=e.changedTouches[0].clientX-startX;
 
-  updateSelect();
-}
+      if(diff<-80){
+        div.classList.add("del");
+        setTimeout(()=>{
+          data.splice(i,1);
+          save();
+        },200);
+      }
+    });
 
-/* 下拉 */
-function updateSelect(){
-  let sel=document.getElementById("cat");
-  sel.innerHTML="";
-  data.cats.forEach((c,i)=>{
-    let op=document.createElement("option");
-    op.value=i;
-    op.textContent=c.name;
-    sel.appendChild(op);
+    list.appendChild(div);
   });
 }
 
-/* modal */
-function openModal(){
-  document.getElementById("modal").style.display="flex";
-}
-
-/* 添加 */
+/* ========= 添加 ========= */
 function add(){
-  let i=document.getElementById("cat").value;
-  let text=document.getElementById("text").value;
-  let time=document.getElementById("time").value;
 
+  let text=document.getElementById("text").value;
   if(!text)return;
 
-  data.cats[i].tasks.push({
-    text,
-    time:time||null,
-    done:false
-  });
+  let task=aiParse(text);
+  data.push(task);
 
-  document.getElementById("modal").style.display="none";
+  document.getElementById("text").value="";
   save();
+}
+
+/* ========= UI ========= */
+function toggle(){
+  let p=document.getElementById("panel");
+  p.style.display=p.style.display==="none"?"block":"none";
 }
 
 render();
